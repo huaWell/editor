@@ -825,13 +825,12 @@ function SidebarObject( editor ) {
 		objectRenderOrder.setValue( object.renderOrder );
 
 		try {
-
+			// 如果userData存的变量是class，另一种方式存储
 			objectUserData.setValue( JSON.stringify( object.userData, null, '  ' ) );
 
 		} catch ( error ) {
-
+			// 说明有变量是class
 			console.log( error );
-
 		}
 
 		objectUserData.setBorderColor( 'transparent' );

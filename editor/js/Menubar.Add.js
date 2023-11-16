@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
-import { UIPanel, UIRow, UIHorizontalRule } from './libs/ui.js';
+import { UIPanel, UIRow, UIHorizontalRule, UIBreak } from './libs/ui.js';
 
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
+import { AddScriptCommand } from './commands/AddScriptCommand.js';
 
 function MenubarAdd( editor ) {
 
@@ -444,8 +445,177 @@ function MenubarAdd( editor ) {
 	} );
 	options.add( option );
 
-	return container;
+	// 特效
+	options.add( new UIHorizontalRule() );
 
+	option = new UIRow();
+	option.setClass('option');
+	option.setTextContent("粒子特效");
+	option.onClick(function(){
+		var geom = new THREE.BufferGeometry();
+		var texture = new THREE.TextureLoader().load('/editor/images/snow.png');
+		var sMat = new THREE.SpriteMaterial({
+			map: texture,
+			transparent: true,
+			opacity: 0.5
+		})
+
+		var material = new THREE.PointsMaterial({
+			size: 10,
+			transparent: true,
+			blending:THREE.AdditiveBlending,	// 融合模式
+			//opacity: 0.6,
+			// vertexColors: true,
+			// color: 0xffffff,
+			//sizeAttenuation: true,
+			map: texture,
+			depthTest: false    // 设置解决透明度有问题的情况
+		})
+		
+		const drops = 20000;	// 雨滴数量
+		const raindropSpeed = 5;	// 雨滴下落速度
+
+		// 定义顶点数据
+		const positions = new Float32Array(drops*3);
+		const velocities = new Float32Array(drops*3);
+
+		for (var i = 0; i < drops; i++) {
+			positions[i*3] = (Math.random() - 0.5) * 8000;	// x
+			positions[i*3 + 1] = Math.random() * 5000;	// y
+			positions[i*3 + 2] = (Math.random() - 0.5) * 16000;	// z
+			// 雨滴位移速度
+			velocities[i*3] = 0; 	// x
+			velocities[i*3+1] = -raindropSpeed;	// y
+			velocities[i*3+2] = 0;	// z
+		}
+	
+		// 将位置数组设置为 geometry 的 attribute  
+		geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+		geom.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+
+		var snow = new THREE.Points(geom, material);
+		geom.attributes.position.needsUpdate = true;
+		snow.name = 'ParticleEffect';
+
+		editor.execute(new AddObjectCommand(editor, snow))
+
+		// 直接绑定动画, 动画后期做成库
+		const script = {name: 'rainDown', source: `
+			var original = this.getObjectByName( 'ParticleEffect' );
+			function update( event ) {
+				const positions = original.geometry.attributes.position.array;
+				const velocities = original.geometry.attributes.velocity.array;
+				for(let i = 0; i < 20000; ++i) {
+					// 更新雨滴位置
+					positions[i*3] += velocities[i*3];	// x
+					positions[i*3 + 1] += velocities[i*3+1];	// y
+					positions[i*3 + 2] += velocities[i*3+2];	// z
+					// 如果雨滴落到了地面, 重新回到顶部
+					if (positions[i*3+1] < -1500) {
+						positions[i*3] = (Math.random() - 0.5)*8000;	//x
+						positions[i*3 + 1] = Math.random() * 5000;	// y
+						positions[i*3 + 2] = (Math.random() - 0.5) * 16000;	// z
+					}
+				}
+				original.geometry.attributes.position.needsUpdate = true;
+			}
+		`}
+		editor.execute(new AddScriptCommand(editor, editor.selected, script));
+	})
+
+	options.add(option);
+
+
+	// ui组件
+	options.add( new UIHorizontalRule() );
+
+	option = new UIRow();
+	option.setClass('option');
+	option.setTextContent("ui组件-BI图");
+	option.onClick(function(){
+		// create chart
+		var canvas = document.createElement("canvas")
+		document.body.appendChild(canvas);
+		var ctx = canvas.getContext("2d");
+		ctx.canvas.width = 512;
+		ctx.canvas.height = 256;
+		// canvas.style.width = "512px";
+		// canvas.style.height = "256px"
+		//ctx.fillStyle = 'rgba(255,255,255)';
+		
+		// ctx.font = "Bold 100px Arial";
+		// ctx.lineWidth = 4;
+		// ctx.fillText("ABCDE",4,104);
+
+		var chartData = {
+			labels: ["A", "B", "C", "D", "E"],
+			datasets: [{
+			  label: "Data",
+			  data: [10, 20, 30, 40, 50],
+			  borderColor: "blue",
+			  fill: false,
+			}]
+		};
+		  
+		var chartOptions = {
+			responsive: true,
+			maintainAspectRatio: false,
+		};
+
+		var lineChart = new Chart(ctx, {
+			type: "line",
+			data: chartData,
+			options: chartOptions,
+		});
+		lineChart.name = "lineChart";
+
+		var spriteTexture = new THREE.CanvasTexture(ctx.canvas);
+		spriteTexture.name = "SpriteTexture";
+
+		var spriteMaterial = new THREE.SpriteMaterial({
+			map: spriteTexture,
+			//color: '#fff',
+			transparent: true,
+			blending: THREE.AdditiveBlending,
+			depthTest: false,
+			side: THREE.DoubleSide
+			//alphaTest: 0.01
+		});
+		spriteTexture.needsUpdate = true;
+		//spriteTexture.map.needsUpdate = true;
+		//spriteTexture.map.premultiplyAlpha = false;
+		spriteTexture.premultiplyAlpha = false;
+
+		var sprite = new THREE.Sprite(spriteMaterial);
+		// sprite.userData = {
+		// 	"lineChart": lineChart,
+		// 	"texture": spriteTexture
+		// }
+		sprite._lineChart = lineChart;
+		sprite._texture = spriteTexture;
+		sprite.scale.set(48, 24, 1);
+		//sprite.position.set(0,0,98);
+
+		sprite.name = "SpriteLineChart";
+		
+		editor.execute(new AddObjectCommand(editor, sprite));
+
+		const script =  {name: 'lineChartMonitor', source: `
+			var original = this.getObjectByName( 'SpriteLineChart' );
+			var texture = this.getObjectByName( 'SpriteTexture' );
+			function update( event ) {
+				console.log(original);
+				// original._lineChart.data.datasets[0].data = [15,25,35,45,55];
+				// original._lineChart.update();
+				// original._texture.needsUpdate = true;
+			}
+		`}
+		editor.execute(new AddScriptCommand(editor, editor.selected, script));
+	})
+
+	options.add(option);
+
+	return container;
 }
 
 export { MenubarAdd };
